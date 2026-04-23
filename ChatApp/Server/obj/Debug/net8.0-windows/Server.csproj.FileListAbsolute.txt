@@ -1,0 +1,16 @@
+D:\ChatApp\ChatApp\Server\bin\Debug\net8.0-windows\Server.exe
+D:\ChatApp\ChatApp\Server\bin\Debug\net8.0-windows\Server.deps.json
+D:\ChatApp\ChatApp\Server\bin\Debug\net8.0-windows\Server.runtimeconfig.json
+D:\ChatApp\ChatApp\Server\bin\Debug\net8.0-windows\Server.dll
+D:\ChatApp\ChatApp\Server\bin\Debug\net8.0-windows\Server.pdb
+D:\ChatApp\ChatApp\Server\obj\Debug\net8.0-windows\Server.Form1.resources
+D:\ChatApp\ChatApp\Server\obj\Debug\net8.0-windows\Server.csproj.GenerateResource.cache
+D:\ChatApp\ChatApp\Server\obj\Debug\net8.0-windows\Server.GeneratedMSBuildEditorConfig.editorconfig
+D:\ChatApp\ChatApp\Server\obj\Debug\net8.0-windows\Server.AssemblyInfoInputs.cache
+D:\ChatApp\ChatApp\Server\obj\Debug\net8.0-windows\Server.AssemblyInfo.cs
+D:\ChatApp\ChatApp\Server\obj\Debug\net8.0-windows\Server.csproj.CoreCompileInputs.cache
+D:\ChatApp\ChatApp\Server\obj\Debug\net8.0-windows\Server.dll
+D:\ChatApp\ChatApp\Server\obj\Debug\net8.0-windows\refint\Server.dll
+D:\ChatApp\ChatApp\Server\obj\Debug\net8.0-windows\Server.pdb
+D:\ChatApp\ChatApp\Server\obj\Debug\net8.0-windows\Server.genruntimeconfig.cache
+D:\ChatApp\ChatApp\Server\obj\Debug\net8.0-windows\ref\Server.dll
