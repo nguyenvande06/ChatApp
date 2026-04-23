@@ -17,3 +17,4 @@ D:\ChatApp\ChatApp\Client\obj\Debug\net8.0-windows\refint\Client.dll
 D:\ChatApp\ChatApp\Client\obj\Debug\net8.0-windows\Client.pdb
 D:\ChatApp\ChatApp\Client\obj\Debug\net8.0-windows\Client.genruntimeconfig.cache
 D:\ChatApp\ChatApp\Client\obj\Debug\net8.0-windows\ref\Client.dll
+D:\ChatApp\ChatApp\Client\obj\Debug\net8.0-windows\Client.FrmCreateRoom.resources

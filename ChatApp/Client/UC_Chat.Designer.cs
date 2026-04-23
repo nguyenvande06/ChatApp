@@ -285,7 +285,7 @@
             this.pnlRoomManager.Controls.Add(lblRoomManagerTitle);
             this.pnlRoomManager.Controls.Add(txtRoomID);
             this.pnlRoomManager.Controls.Add(btnJoinRoom);
-            this.pnlRoomManager.Controls.Add(btnCreateRoom); 
+            this.pnlRoomManager.Controls.Add(btnCreateRoom);
 
             // THÊM pnlRoomManager VÀO pnlCenter
             this.pnlCenter.Controls.Add(pnlRoomManager);
@@ -357,4 +357,3 @@
         public System.Windows.Forms.Label lblMyName;
     }
 }
-

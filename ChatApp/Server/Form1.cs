@@ -1,4 +1,5 @@
-﻿using System.Net;
+﻿using System.IO;
+using System.Net;
 using System.Net.Sockets;
 using System.Text;
 namespace Server
@@ -17,6 +18,15 @@ namespace Server
         // biến quản lý danh sách client trong nhóm
         // Key: RoomID, Value: Danh sách Username trong phòng đó
         private Dictionary<string, List<string>> dictRooms = new Dictionary<string, List<string>>();
+        // Biến lưu chủ phòng
+        // Key: RoomID, Value: Username người tạo
+        private Dictionary<string, string> dictRoomOwners = new Dictionary<string, string>();
+
+        // Mật khẩu của phòng (nếu có) - Key: RoomID, Value: Password
+        // Lưu mật khẩu: Key là RoomID, Value là Password
+        private Dictionary<string, string> dictRoomPasswords = new Dictionary<string, string>();
+        // lưu 
+        
         private void btnStart_Click(object sender, EventArgs e)
         {
             try
@@ -201,30 +211,53 @@ namespace Server
                     }
                     else if (msg.StartsWith("JOIN_ROOM|"))
                     {
-                        string roomId = msg.Split('|')[1].Trim();
-                        lock (dictRooms)
+                        string[] parts = msg.Split('|');
+                        string roomId = parts[1].Trim();
+                        string passwordInput = parts.Length >= 3 ? parts[2].Trim() : "";
+
+                        // 1. Kiểm tra xem phòng có tồn tại trong từ điển không
+                        if (dictRooms.ContainsKey(roomId))
                         {
-                            if (dictRooms.ContainsKey(roomId))
+                            string correctPass = dictRoomPasswords.ContainsKey(roomId) ? dictRoomPasswords[roomId] : "";
+
+                            // TRƯỜNG HỢP 1: Phòng không có mật khẩu
+                            if (string.IsNullOrEmpty(correctPass))
                             {
-                                // Nếu chưa có tên trong danh sách phòng thì mới thêm vào
-                                if (!dictRooms[roomId].Contains(userName))
-                                {
-                                    dictRooms[roomId].Add(userName);
-                                }
-                                clientSck.Send(Encoding.UTF8.GetBytes($"JOIN_OK|{roomId}\n"));
-                                AppendLog($"{userName} đã vào phòng {roomId}", Color.Magenta);
+                                if (!dictRooms[roomId].Contains(userName)) dictRooms[roomId].Add(userName);
+                                string owner = dictRoomOwners[roomId];
+                                clientSck.Send(Encoding.UTF8.GetBytes($"JOIN_OK|{roomId}|{owner}\n"));
                             }
+                            // TRƯỜNG HỢP 2: Có pass nhưng Client chưa gửi lên
+                            else if (string.IsNullOrEmpty(passwordInput))
+                            {
+                                clientSck.Send(Encoding.UTF8.GetBytes($"NEED_PASS|{roomId}|FIRST\n"));
+                            }
+                            // TRƯỜNG HỢP 3: Client gửi pass và khớp
+                            else if (passwordInput == correctPass)
+                            {
+                                if (!dictRooms[roomId].Contains(userName)) dictRooms[roomId].Add(userName);
+                                string owner = dictRoomOwners[roomId];
+                                clientSck.Send(Encoding.UTF8.GetBytes($"JOIN_OK|{roomId}|{owner}\n"));
+                            }
+                            // TRƯỜNG HỢP 4: Client gửi pass nhưng SAI
                             else
                             {
-                                // Trường hợp không tìm thấy phòng
-                                clientSck.Send(Encoding.UTF8.GetBytes("ERROR|Không tìm thấy phòng này!\n"));
+                                clientSck.Send(Encoding.UTF8.GetBytes($"NEED_PASS|{roomId}|FAIL\n"));
                             }
+                        } // <--- KẾT THÚC kiểm tra tồn tại phòng ở đây
+                        else
+                        {
+                            // 2. Nếu phòng KHÔNG tồn tại thì báo lỗi ngay
+                            byte[] errorData = Encoding.UTF8.GetBytes($"ERROR|Phòng {roomId} không tồn tại!\n");
+                            clientSck.Send(errorData);
+                            AppendLog($"Client {userName} thử vào phòng {roomId} không tồn tại.", Color.Orange);
                         }
                     }
                     // Nhận tin tạo phòng mới từ Client
                     if (msg.StartsWith("CREATE_ROOM|"))
                     {
                         string roomId = msg.Split('|')[1].Trim();
+                        string pass = msg.Split('|')[2].Trim();
                         lock (dictRooms)
                         {
                             if (dictRooms.ContainsKey(roomId))
@@ -235,8 +268,48 @@ namespace Server
                             {
                                 dictRooms.Add(roomId, new List<string>());
                                 dictRooms[roomId].Add(userName);
-                                clientSck.Send(Encoding.UTF8.GetBytes($"CREATE_OK|{roomId}\n"));
+                                dictRoomOwners[roomId] = userName;
+                                dictRoomPasswords[roomId] = pass;
+                                clientSck.Send(Encoding.UTF8.GetBytes($"CREATE_OK|{roomId}|{userName}\n"));
                                 AppendLog($"Phòng {roomId} đã được tạo bởi {userName}", Color.Purple);
+                            }
+                        }
+                    }
+                    // xóa phòng
+                    else if (msg.StartsWith("DELETE_ROOM|"))
+                    {
+                        string roomId = msg.Split('|')[1].Trim();
+
+                        lock (dictRooms)
+                        {
+                            // 1. Kiểm tra phòng có tồn tại không
+                            if (dictRoomOwners.ContainsKey(roomId))
+                            {
+                                // 2. Kiểm tra có phải chủ phòng không
+                                if (dictRoomOwners[roomId] == userName)
+                                {
+                                    // Lấy danh sách thành viên trước khi xóa để gửi thông báo
+                                    List<string> members = new List<string>(dictRooms[roomId]);
+
+                                    // 3. Thực hiện xóa phòng
+                                    dictRooms.Remove(roomId);
+                                    dictRoomOwners.Remove(roomId);
+
+                                    // 4. Gửi thông báo cho TẤT CẢ client từng ở trong phòng đó
+                                    byte[] deleteMsg = Encoding.UTF8.GetBytes($"ROOM_DELETED|{roomId}\n");
+                                    foreach (string member in members)
+                                    {
+                                        if (dictClients.ContainsKey(member))
+                                        {
+                                            try { dictClients[member].Send(deleteMsg); } catch { }
+                                        }
+                                    }
+                                    AppendLog($"Chủ phòng {userName} đã xóa phòng {roomId}", Color.Red);
+                                }
+                                else
+                                {
+                                    clientSck.Send(Encoding.UTF8.GetBytes("ERROR|Bạn không phải chủ phòng này!\n"));
+                                }
                             }
                         }
                     }

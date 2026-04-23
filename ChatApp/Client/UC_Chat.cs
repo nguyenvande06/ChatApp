@@ -18,6 +18,7 @@ namespace Client
         // kiểm soát status của phòng ( in hay out)
         private bool isInGroup = false; // Biến flag kiểm soát trạng thái trong phòng
         private string joinedRoomId = ""; // lưu id group
+        private string currentRoomOwner = "";
         public UC_Chat(Socket sck)
         {
             InitializeComponent();
@@ -37,7 +38,16 @@ namespace Client
             btnJoinRoom.Click += BtnJoinRoom_Click;
             btnLeaveRoom.Click += BtnLeaveRoom_Click;
             btnCreateRoom.Click += btnCreateRoom_Click;
-            btnDeleteRoom.Click += btnDeleteRoom_Click;
+            // kiểm tra 1 chút btnDeleteRoom.Click += btnDeleteRoom_Click;
+            btnDeleteRoom.Click += (s, e) => {
+                var confirm = MessageBox.Show("Bạn có chắc chắn muốn XÓA PHÒNG này không? Mọi người sẽ bị văng ra.",
+                                             "Xác nhận", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                if (confirm == DialogResult.Yes)
+                {
+                    string roomId = joinedRoomId; // Lấy ID phòng hiện tại
+                    SendData("DELETE_ROOM|" + roomId);
+                }
+            };
         }
         private Panel pnlWelcome;
         private string currentChatTarget = ""; // để mặc định là trống ( nhằm hiển thị giao diện welcome)
@@ -101,6 +111,7 @@ namespace Client
             {
                 if (!inRoom)
                 {
+                    btnDeleteRoom.Visible = false; // Ẩn nút delete khi chưa vào phòng cụ thể
                     pnlChatHeader.BackColor = Color.FromArgb(240, 245, 255);
                     // TRẠNG THÁI: CHƯA VÀO PHÒNG CỤ THỂ
                     pnlRoomManager.Visible = true;
@@ -112,6 +123,16 @@ namespace Client
                 }
                 else
                 {
+                    var mainForm = this.ParentForm as Form1;
+                    if (mainForm != null && !string.IsNullOrEmpty(currentRoomOwner))
+                    {
+                        // Chỉ hiện nếu tên mình khớp với chủ phòng đã lưu
+                        btnDeleteRoom.Visible = mainForm.MyUsername.Equals(currentRoomOwner, StringComparison.OrdinalIgnoreCase);
+                    }
+                    else
+                    {
+                        btnDeleteRoom.Visible = false;
+                    }
                     pnlChatHeader.BackColor = Color.FromArgb(230, 240, 255);
                     // TRẠNG THÁI: ĐANG TRONG PHÒNG (Hoặc quay lại từ chat riêng)
                     pnlRoomManager.Visible = false;
@@ -133,6 +154,7 @@ namespace Client
             }
             else
             {
+                btnDeleteRoom.Visible = false;
                 pnlChatHeader.BackColor = Color.FromArgb(240, 255, 240);
                 // TRẠNG THÁI: CHAT RIÊNG
                 pnlRoomManager.Visible = false;
@@ -180,6 +202,8 @@ namespace Client
         }
 
         // Hàm phụ để tô màu nút đang chọn
+        // cờ hiệu cho việc thông báo mật khẩu sai
+        bool flag = false;
         private void Receive()
         {
             while (true)
@@ -239,12 +263,60 @@ namespace Client
                             else if (msg.StartsWith("CREATE_OK|") || msg.StartsWith("JOIN_OK|"))
                             {
                                 string roomId = msg.Split('|')[1];
-                                EnterRoomUI(roomId); // Hàm này bạn đã có, dùng để hiện màn hình chat
+                                string ownerName = msg.Split('|')[2]; //  tên chủ phòng do server gửi
+                                EnterRoomUI(roomId , ownerName); // Hàm này bạn đã có, dùng để hiện màn hình chat
                             }
                             else if (msg.StartsWith("ERROR|"))
                             {
                                 string errorMsg = msg.Split('|')[1];
                                 MessageBox.Show(errorMsg, "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            }
+                            // delete room
+                            else if (msg.StartsWith("ROOM_DELETED|"))
+                            {
+                                string roomId = msg.Split('|')[1];
+
+                                // 1. Thông báo cho người dùng
+                                MessageBox.Show($"Phòng chat {roomId} đã bị chủ phòng giải tán!", "Thông báo");
+
+                                // 2. Reset trạng thái group của Client
+                                this.isInGroup = false;
+                                this.joinedRoomId = "";
+
+                                // 3. Nếu Client đang ở chính cái phòng vừa bị xóa đó
+                                if (currentChatTarget == "GROUP_" + roomId)
+                                {
+                                    // Ép quay về trang quản lý phòng ngay lập tức
+                                    SwitchChatContext("Group", true, false);
+                                }
+
+                                // 4. Xóa lịch sử chat của phòng này (tùy chọn)
+                                if (messageHistory.ContainsKey("GROUP_" + roomId))
+                                    messageHistory.Remove("GROUP_" + roomId);
+                            }
+                            else if (msg.StartsWith("NEED_PASS|"))
+                            {
+                                string[] parts = msg.Split('|');
+                                string roomId = parts[1];
+                                string status = parts[2]; // Nhận "FIRST" hoặc "FAIL"
+
+                                this.Invoke(new MethodInvoker(() => {
+                                    // Nếu Server bảo FAIL (tức là vừa nhập xong mà sai) thì mới hiện thông báo
+                                    if (status == "FAIL")
+                                    {
+                                        MessageBox.Show("Mật khẩu không chính xác!", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                                    }
+
+                                    using (FrmCreateRoom frm = new FrmCreateRoom())
+                                    {
+                                        frm.SetJoinMode(roomId);
+                                        if (frm.ShowDialog() == DialogResult.OK)
+                                        {
+                                            // Gửi lại mật khẩu người dùng vừa nhập trong Form
+                                            SendData($"JOIN_ROOM|{roomId}|{frm.Password}");
+                                        }
+                                    }
+                                }));
                             }
                             else
                             {
@@ -387,6 +459,7 @@ namespace Client
         private void BtnJoinRoom_Click(object sender, EventArgs e)
         {
             string roomId = txtRoomID.Text.Trim();
+            string password = "";
             if (string.IsNullOrEmpty(roomId))
             {
                 MessageBox.Show("Vui lòng nhập mã phòng!");
@@ -395,21 +468,30 @@ namespace Client
 
             // Gửi lệnh tham gia lên Server (Giao thức bạn tự định nghĩa)
             // Ví dụ: "JOIN_ROOM|roomId" , code phần logic gửi lên server để lưu lại danh sách Room
-            string data = $"JOIN_ROOM|{roomId}";
+            string data = $"JOIN_ROOM|{roomId}|{password}";
             // dùng hàm SendData đã viết để gửi lên server 
             SendData(data);
-            // Tạm thời cho vào luôn (Trong thực tế sẽ đợi Server phản hồi JOIN_OK)
+            
         }
 
-        private void EnterRoomUI(string roomId)
+        private void EnterRoomUI(string roomId , string ownerName)
         {
             this.joinedRoomId = roomId;
             this.isInGroup = true; // Cập nhật trạng thái đã vào phòng
+            this.currentRoomOwner = ownerName;
             currentChatTarget = "GROUP_" + roomId; // Đánh dấu đây là phòng chat nhóm cụ thể
             pnlRoomManager.Visible = false;
             rtbChat.Visible = true;
             pnlInputArea.Visible = true;
-
+            var mainForm = this.ParentForm as Form1; // Lấy Username của mình từ Form chính
+            if (mainForm != null && mainForm.MyUsername.Equals(ownerName, StringComparison.OrdinalIgnoreCase))
+            {
+                btnDeleteRoom.Visible = true; // Hiện nút nếu là chủ
+            }
+            else
+            {
+                btnDeleteRoom.Visible = false; // Ẩn nếu là thành viên
+            }
             // HIỆN NÚT RỜI PHÒNG
             btnLeaveRoom.Visible = true;
             lblRoomInfo.Text = "📣 PHÒNG CHAT: " + roomId;
@@ -467,15 +549,18 @@ namespace Client
         }
         private void btnCreateRoom_Click(object sender, EventArgs e)
         {
-            string roomId = txtRoomID.Text.Trim();
-            if (!string.IsNullOrEmpty(roomId))
+            using (FrmCreateRoom frm = new FrmCreateRoom())
             {
-                // Gửi lệnh lên server yêu cầu tạo phòng
-                SendData("CREATE_ROOM|" + roomId);
-            }
-            else
-            {
-                MessageBox.Show("Vui lòng nhập mã phòng muốn tạo!");
+                // Hiển thị form phụ dưới dạng Dialog (khóa form chính cho đến khi xong)
+                if (frm.ShowDialog() == DialogResult.OK)
+                {
+                    string id = frm.RoomID;
+                    string pass = frm.Password;
+
+                    // Gửi dữ liệu lên Server
+                    SendData($"CREATE_ROOM|{id}|{pass}");
+                }
+                
             }
         }
         private void SendData(string data)
@@ -494,6 +579,9 @@ namespace Client
                 MessageBox.Show("Lỗi gửi dữ liệu: " + ex.Message);
             }
         }
+        
+
+
 
 
     }

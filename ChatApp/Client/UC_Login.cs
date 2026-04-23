@@ -21,10 +21,13 @@ namespace Client
         private void BtnLogin_Click(object sender, EventArgs e)
         {
             string username = txtUsername.Text.Trim();
-
-            if (string.IsNullOrEmpty(username))
+            string password = txtPassword.Text.Trim();
+            if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
             {
-                MessageBox.Show("Vui lòng nhập Username!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                if (string.IsNullOrEmpty(username))
+                    MessageBox.Show("Vui lòng nhập Username!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                else if (string.IsNullOrEmpty(password))
+                    MessageBox.Show("Vui lòng nhập Password!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
             if (this.ParentForm is Form1 mainForm)
